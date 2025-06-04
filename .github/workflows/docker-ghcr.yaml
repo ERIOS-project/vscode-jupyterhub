@@ -1,0 +1,44 @@
+name: Build and Push Docker Image to GHCR
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v2
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata (tags, labels) for Docker
+        id: meta
+        uses: docker/metadata-action@v3
+        with:
+          images: ghcr.io/erios-project/vscode-jupyterhub
+          tags: |
+            type=sha,event=branch,ref=main,name=${{ github.sha }}
+            type=ref,event=branch,ref=main,latest=true,name=latest
+
+      - name: Build and Push Docker image with environment variables
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          tags: |
+            ghcr.io/erios-project/vscode-jupyterhub:${{ github.sha }}
+            ghcr.io/erios-project/vscode-jupyterhub:latest
+          labels: ${{ steps.meta.outputs.labels }}
