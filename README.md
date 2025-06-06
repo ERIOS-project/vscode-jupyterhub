@@ -8,7 +8,7 @@
 * 🔐 Authentication handled entirely by JupyterHub
 * ⚙️ Built on top of `jupyter/minimal-notebook` for speed and simplicity
 * 🚀 Includes CI/CD via GitHub Actions for automated publishing to GHCR
-* 🧰 Includes only essential developer tools: `debugpy`, `poetry`, `mamba`
+* 🧰 Includes only essential developer tools: `debugpy`, `poetry`, `mamba`, `udocker`
 
 ---
 
@@ -79,6 +79,7 @@ vscode-jupyterhub-image/
 * `mamba` – Fast conda replacement
 * `debugpy` – Debugging Python apps
 * `poetry` – Python dependency management
+* `udocker` – Run docker images
 
 ---
 

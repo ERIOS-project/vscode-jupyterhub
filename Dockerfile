@@ -47,5 +47,5 @@ EOF
 # Switch back to the default Jupyter Notebook user (non-root)
 USER ${NB_UID}
 
-# Install only the essential Python tools: debugpy (for debugging) and poetry (for dependency management)
-RUN pip install --no-cache-dir debugpy poetry
+# Install only the essential Python tools: debugpy (for debugging), poetry (for dependency management), and udocker (for run docker images)
+RUN pip install --no-cache-dir debugpy poetry udocker
