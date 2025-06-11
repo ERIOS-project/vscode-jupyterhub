@@ -6,7 +6,7 @@ ENV CODE_SERVER_VERSION=4.89.1
 
 # Install only required deps
 RUN apt-get update && \
-    apt-get install -y curl inotify-tools bash && \
+    apt-get install -y curl bash && \
     ARCH=$(dpkg --print-architecture) && \
     if [ "$ARCH" = "arm64" ]; then \
         CODE_URL="https://github.com/coder/code-server/releases/download/v${CODE_SERVER_VERSION}/code-server-${CODE_SERVER_VERSION}-linux-arm64.tar.gz"; \
@@ -30,50 +30,20 @@ RUN pip install --no-cache-dir jupyter-server-proxy debugpy poetry udocker && \
 # Symlink to docker logs
 RUN ln -sf /proc/1/fd/1 /var/log/terminal.log
 
-# Shell wrapper with security banner (no tee to avoid duplication)
+# Custom shell with banner
 RUN echo '#!/bin/bash' > /usr/local/bin/logged-bash && \
     echo 'echo "🛡️  This session is being monitored and recorded for security and compliance purposes."' >> /usr/local/bin/logged-bash && \
     echo 'exec bash -i' >> /usr/local/bin/logged-bash && \
     chmod 555 /usr/local/bin/logged-bash && \
     chown root:root /usr/local/bin/logged-bash
 
-# Force bash shell for jovyan
+# Force shell for jovyan
 RUN usermod -s /usr/local/bin/logged-bash jovyan
 
 # Log every command executed by the user
 RUN echo 'export PROMPT_COMMAND='\''RECORD=$(history 1 | sed "s/^ *[0-9]* *//"); echo "[COMMAND] $(whoami): $RECORD" >> /proc/1/fd/1'\''' > /etc/profile.d/audit-cmd.sh && \
     chmod 444 /etc/profile.d/audit-cmd.sh && \
     chown root:root /etc/profile.d/audit-cmd.sh
-
-# Audit script (file monitoring to stdout)
-# Secure audit-fs script
-RUN mkdir -p /usr/local/bin && \
-    echo '#!/bin/bash' > /usr/local/bin/audit-fs && \
-    echo 'sleep 5' >> /usr/local/bin/audit-fs && \
-    echo 'WATCH_DIR="/home/jovyan"' >> /usr/local/bin/audit-fs && \
-    echo 'LOG="/dev/stdout"' >> /usr/local/bin/audit-fs && \
-    echo 'if [ ! -d "$WATCH_DIR" ]; then' >> /usr/local/bin/audit-fs && \
-    echo '  echo "[AUDIT ERROR] Directory $WATCH_DIR does not exist!" >> "$LOG"' >> /usr/local/bin/audit-fs && \
-    echo '  exit 1' >> /usr/local/bin/audit-fs && \
-    echo 'fi' >> /usr/local/bin/audit-fs && \
-    echo 'inotifywait -m -r -e create,modify,delete,move --format "%T|%e|%w%f" --timefmt "%F %T" "$WATCH_DIR" | \\' >> /usr/local/bin/audit-fs && \
-    echo 'while IFS="|" read -r timestamp event file; do' >> /usr/local/bin/audit-fs && \
-    echo '  echo "[FILE EVENT] $timestamp $event $file" >> "$LOG"' >> /usr/local/bin/audit-fs && \
-    echo '  if echo "$event" | grep -qE "CREATE|MODIFY" && [ -f "$file" ]; then' >> /usr/local/bin/audit-fs && \
-    echo '    case "$file" in' >> /usr/local/bin/audit-fs && \
-    echo '      *.py|*.ipynb|*.sh|*.json|*.env|*.yaml|*.yml|*.txt|*.js)' >> /usr/local/bin/audit-fs && \
-    echo '        echo "--- Content of $file ---" >> "$LOG"' >> /usr/local/bin/audit-fs && \
-    echo '        cat "$file" >> "$LOG"' >> /usr/local/bin/audit-fs && \
-    echo '        echo "--- End of $file ---" >> "$LOG"' >> /usr/local/bin/audit-fs && \
-    echo '        ;;' >> /usr/local/bin/audit-fs && \
-    echo '      *)' >> /usr/local/bin/audit-fs && \
-    echo '        echo "--- Content skipped for $file (extension not tracked) ---" >> "$LOG"' >> /usr/local/bin/audit-fs && \
-    echo '        ;;' >> /usr/local/bin/audit-fs && \
-    echo '    esac' >> /usr/local/bin/audit-fs && \
-    echo '  fi' >> /usr/local/bin/audit-fs && \
-    echo 'done' >> /usr/local/bin/audit-fs && \
-    chmod 555 /usr/local/bin/audit-fs && \
-    chown root:root /usr/local/bin/audit-fs
 
 # Lock VS Code terminal settings
 RUN mkdir -p /opt/static/code-server/User && \
@@ -108,9 +78,8 @@ c.ServerProxy.servers = {
 }
 EOF
 
-# Startup entry: audit + JupyterHub compatibility
+# Startup script for JupyterHub compatibility
 RUN echo '#!/bin/bash' > /usr/local/bin/start-with-audit && \
-    echo '/usr/local/bin/audit-fs &' >> /usr/local/bin/start-with-audit && \
     echo 'if [ "$#" -eq 0 ]; then' >> /usr/local/bin/start-with-audit && \
     echo '  exec start-singleuser.sh' >> /usr/local/bin/start-with-audit && \
     echo 'else' >> /usr/local/bin/start-with-audit && \
@@ -119,7 +88,6 @@ RUN echo '#!/bin/bash' > /usr/local/bin/start-with-audit && \
     chmod 555 /usr/local/bin/start-with-audit && \
     chown root:root /usr/local/bin/start-with-audit
 
-# Final command
 CMD ["/usr/local/bin/start-with-audit"]
 
 USER ${NB_UID}
