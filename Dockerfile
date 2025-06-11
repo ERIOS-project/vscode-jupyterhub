@@ -1,6 +1,5 @@
 FROM jupyter/minimal-notebook:latest
 
-# Switch to root
 USER root
 
 ENV CODE_SERVER_VERSION=4.89.1
@@ -29,17 +28,17 @@ RUN pip install --no-cache-dir jupyter-server-proxy debugpy poetry udocker && \
 # Symbolic link to docker stdout
 RUN ln -sf /proc/1/fd/1 /var/log/terminal.log
 
-# Shell wrapper: logs to docker logs only with security message
+# Shell wrapper with security banner
 RUN echo '#!/bin/bash' > /usr/local/bin/logged-bash && \
     echo 'echo "🛡️  This session is being monitored and recorded for security and compliance purposes."' >> /usr/local/bin/logged-bash && \
     echo 'exec script -q -c /bin/bash /proc/1/fd/1' >> /usr/local/bin/logged-bash && \
     chmod 555 /usr/local/bin/logged-bash && \
     chown root:root /usr/local/bin/logged-bash
 
-# Force jovyan to use logged-bash
+# Force shell for jovyan
 RUN usermod -s /usr/local/bin/logged-bash jovyan
 
-# Audit script: logs file events and contents to docker logs (with extension filter)
+# Audit script
 RUN echo '#!/bin/bash' > /usr/local/bin/audit-fs && \
     echo 'inotifywait -m -r -e create,modify,delete,move --format "%T|%e|%w%f" --timefmt "%F %T" /home/jovyan | while IFS="|" read -r timestamp event file; do' >> /usr/local/bin/audit-fs && \
     echo '  echo "[FILE EVENT] $timestamp $event $file" >> /proc/1/fd/1' >> /usr/local/bin/audit-fs && \
@@ -56,7 +55,7 @@ RUN echo '#!/bin/bash' > /usr/local/bin/audit-fs && \
     chmod 555 /usr/local/bin/audit-fs && \
     chown root:root /usr/local/bin/audit-fs
 
-# Lock VS Code terminal settings (force logged-bash)
+# Lock VS Code terminal settings
 RUN mkdir -p /opt/static/code-server/User && \
     cat <<EOF > /opt/static/code-server/User/settings.json
 {
@@ -89,13 +88,18 @@ c.ServerProxy.servers = {
 }
 EOF
 
-# Startup wrapper: run audit-fs + Jupyter Lab
+# Compatible startup with JupyterHub
 RUN echo '#!/bin/bash' > /usr/local/bin/start-with-audit && \
-    echo '/usr/local/bin/audit-fs & exec start.sh jupyter lab' >> /usr/local/bin/start-with-audit && \
-    chmod +x /usr/local/bin/start-with-audit && \
-    chown root:root /usr/local/bin/start-with-audit && \
-    chmod 555 /usr/local/bin/start-with-audit
+    echo '/usr/local/bin/audit-fs &' >> /usr/local/bin/start-with-audit && \
+    echo 'if [ "$#" -eq 0 ]; then' >> /usr/local/bin/start-with-audit && \
+    echo '  exec start-singleuser.sh' >> /usr/local/bin/start-with-audit && \
+    echo 'else' >> /usr/local/bin/start-with-audit && \
+    echo '  exec "$@"' >> /usr/local/bin/start-with-audit && \
+    echo 'fi' >> /usr/local/bin/start-with-audit && \
+    chmod 555 /usr/local/bin/start-with-audit && \
+    chown root:root /usr/local/bin/start-with-audit
 
-ENTRYPOINT ["/usr/local/bin/start-with-audit"]
+# JupyterHub expects CMD not ENTRYPOINT
+CMD ["/usr/local/bin/start-with-audit"]
 
 USER ${NB_UID}
