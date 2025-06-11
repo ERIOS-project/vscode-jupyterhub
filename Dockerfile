@@ -4,6 +4,13 @@ USER root
 
 ENV CODE_SERVER_VERSION=4.89.1
 
+# Uninstall jupyterlab deps
+RUN pip uninstall -y jupyterlab jupyterlab-server jupyterlab-pygments && \
+    conda remove -y jupyterlab jupyterlab_server jupyterlab_widgets --force && \
+    conda clean -afy || true
+RUN rm -rf /root/.cache/pip /home/jovyan/.cache/pip
+RUN rm -rf /opt/conda/pkgs/jupyterlab* /opt/conda/pkgs/*jupyterlab* /opt/conda/share/jupyter/lab
+
 # Install only required deps
 RUN apt-get update && \
     apt-get install -y curl bash && \
