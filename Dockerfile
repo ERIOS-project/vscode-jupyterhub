@@ -28,10 +28,10 @@ RUN pip install --no-cache-dir jupyter-server-proxy debugpy poetry udocker && \
 # Symbolic link to docker stdout
 RUN ln -sf /proc/1/fd/1 /var/log/terminal.log
 
-# Shell wrapper with security banner (fixes echo + logs to stdout)
+# Shell wrapper with security banner 
 RUN echo '#!/bin/bash' > /usr/local/bin/logged-bash && \
-    echo 'echo "🛡️  This session is being monitored and recorded for security and compliance purposes." | tee /dev/stdout' >> /usr/local/bin/logged-bash && \
-    echo 'exec script -q -E -c "stty -echo; exec /bin/bash" >(tee /dev/stdout)' >> /usr/local/bin/logged-bash && \
+    echo 'echo "🛡️  This session is being monitored and recorded for security and compliance purposes."' >> /usr/local/bin/logged-bash && \
+    echo 'exec script -q -E /bin/bash' >> /usr/local/bin/logged-bash && \
     chmod 555 /usr/local/bin/logged-bash && \
     chown root:root /usr/local/bin/logged-bash
 
