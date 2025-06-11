@@ -34,7 +34,7 @@ RUN ln -sf /proc/1/fd/1 /var/log/terminal.log
 RUN [ -e /bin/rbash ] || ln -s /bin/bash /bin/rbash && \
     echo '#!/bin/rbash' > /usr/local/bin/logged-bash && \
     echo 'echo "🛡️  This session is being monitored and recorded for security and compliance purposes."' >> /usr/local/bin/logged-bash && \
-    echo 'exec rbash -i 2>&1 | tee /dev/stdout' >> /usr/local/bin/logged-bash && \
+    echo 'rbash -i 2>&1 | tee /dev/stdout' >> /usr/local/bin/logged-bash && \
     chmod 555 /usr/local/bin/logged-bash && \
     chown root:root /usr/local/bin/logged-bash
 
