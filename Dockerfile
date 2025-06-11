@@ -31,7 +31,7 @@ RUN ln -sf /proc/1/fd/1 /var/log/terminal.log
 # Shell wrapper with security banner 
 RUN echo '#!/bin/bash' > /usr/local/bin/logged-bash && \
     echo 'echo "🛡️  This session is being monitored and recorded for security and compliance purposes."' >> /usr/local/bin/logged-bash && \
-    echo 'exec script -q -E /bin/bash' >> /usr/local/bin/logged-bash && \
+    echo 'bash -i 2>&1 | tee /dev/stdout' >> /usr/local/bin/logged-bash && \
     chmod 555 /usr/local/bin/logged-bash && \
     chown root:root /usr/local/bin/logged-bash
 
