@@ -30,10 +30,10 @@ RUN pip install --no-cache-dir jupyter-server-proxy debugpy poetry udocker && \
 # Symlink to docker logs
 RUN ln -sf /proc/1/fd/1 /var/log/terminal.log
 
-# Secure shell wrapper with logging
+# Shell wrapper with security banner (no tee to avoid duplication)
 RUN echo '#!/bin/bash' > /usr/local/bin/logged-bash && \
     echo 'echo "🛡️  This session is being monitored and recorded for security and compliance purposes."' >> /usr/local/bin/logged-bash && \
-    echo 'bash -i 2>&1 | tee /dev/stdout' >> /usr/local/bin/logged-bash && \
+    echo 'exec bash -i' >> /usr/local/bin/logged-bash && \
     chmod 555 /usr/local/bin/logged-bash && \
     chown root:root /usr/local/bin/logged-bash
 
@@ -47,21 +47,25 @@ RUN echo 'export PROMPT_COMMAND='\''RECORD=$(history 1 | sed "s/^ *[0-9]* *//");
 
 # Audit script
 RUN echo '#!/bin/bash' > /usr/local/bin/audit-fs && \
-    echo 'exec 1> >(tee /dev/stdout) 2>&1' >> /usr/local/bin/audit-fs && \
+    echo 'sleep 3' >> /usr/local/bin/audit-fs && \
+    echo 'LOG_PIPE="/proc/1/fd/1"' >> /usr/local/bin/audit-fs && \
+    echo 'TMP_LOG="/tmp/audit.log"' >> /usr/local/bin/audit-fs && \
+    echo 'touch "$TMP_LOG"' >> /usr/local/bin/audit-fs && \
     echo 'inotifywait -m -r -e create,modify,delete,move --format "%T|%e|%w%f" --timefmt "%F %T" /home/jovyan | while IFS="|" read -r timestamp event file; do' >> /usr/local/bin/audit-fs && \
-    echo '  echo "[FILE EVENT] $timestamp $event $file"' >> /usr/local/bin/audit-fs && \
+    echo '  echo "[FILE EVENT] $timestamp $event $file" | tee -a "$LOG_PIPE" >> "$TMP_LOG"' >> /usr/local/bin/audit-fs && \
     echo '  if echo "$event" | grep -qE "CREATE|MODIFY" && [ -f "$file" ]; then' >> /usr/local/bin/audit-fs && \
     echo '    if [[ "$file" =~ \.py$|\.ipynb$|\.sh$|\.json$|\.env$|\.yaml$|\.yml$|\.txt$|\.js$ ]]; then' >> /usr/local/bin/audit-fs && \
-    echo '      echo "--- Content of $file ---"' >> /usr/local/bin/audit-fs && \
-    echo '      cat "$file"' >> /usr/local/bin/audit-fs && \
-    echo '      echo "--- End of $file ---"' >> /usr/local/bin/audit-fs && \
+    echo '      echo "--- Content of $file ---" | tee -a "$LOG_PIPE" >> "$TMP_LOG"' >> /usr/local/bin/audit-fs && \
+    echo '      cat "$file" | tee -a "$LOG_PIPE" >> "$TMP_LOG"' >> /usr/local/bin/audit-fs && \
+    echo '      echo "--- End of $file ---" | tee -a "$LOG_PIPE" >> "$TMP_LOG"' >> /usr/local/bin/audit-fs && \
     echo '    else' >> /usr/local/bin/audit-fs && \
-    echo '      echo "--- Content skipped for $file (extension not tracked) ---"' >> /usr/local/bin/audit-fs && \
+    echo '      echo "--- Content skipped for $file (extension not tracked) ---" | tee -a "$LOG_PIPE" >> "$TMP_LOG"' >> /usr/local/bin/audit-fs && \
     echo '    fi' >> /usr/local/bin/audit-fs && \
     echo '  fi' >> /usr/local/bin/audit-fs && \
     echo 'done' >> /usr/local/bin/audit-fs && \
     chmod 555 /usr/local/bin/audit-fs && \
     chown root:root /usr/local/bin/audit-fs
+
 
 # Lock VS Code terminal settings
 RUN mkdir -p /opt/static/code-server/User && \
