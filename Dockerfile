@@ -4,9 +4,9 @@ USER root
 
 ENV CODE_SERVER_VERSION=4.89.1
 
-# Install code-server and dependencies
+# Install only required deps
 RUN apt-get update && \
-    apt-get install -y curl inotify-tools && \
+    apt-get install -y curl inotify-tools bash && \
     ARCH=$(dpkg --print-architecture) && \
     if [ "$ARCH" = "arm64" ]; then \
         CODE_URL="https://github.com/coder/code-server/releases/download/v${CODE_SERVER_VERSION}/code-server-${CODE_SERVER_VERSION}-linux-arm64.tar.gz"; \
@@ -19,26 +19,34 @@ RUN apt-get update && \
     cp -r /tmp/code-server-${CODE_SERVER_VERSION}-linux-*/* /opt/code-server && \
     ln -s /opt/code-server/bin/code-server /usr/local/bin/code-server && \
     rm -rf /tmp/* && \
+    apt-get purge -y curl && \
+    apt-get autoremove -y && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# Install Python tools
+# Python tools
 RUN pip install --no-cache-dir jupyter-server-proxy debugpy poetry udocker && \
     conda install -n base -c conda-forge mamba && conda clean -afy
 
-# Symbolic link to docker stdout
+# Symlink to docker logs
 RUN ln -sf /proc/1/fd/1 /var/log/terminal.log
 
-# Shell wrapper with security banner 
-RUN echo '#!/bin/bash' > /usr/local/bin/logged-bash && \
+# Secure bash shell wrapper with rbash
+RUN ln -s /bin/bash /bin/rbash && \
+    echo '#!/bin/rbash' > /usr/local/bin/logged-bash && \
     echo 'echo "🛡️  This session is being monitored and recorded for security and compliance purposes."' >> /usr/local/bin/logged-bash && \
-    echo 'bash -i 2>&1 | tee /dev/stdout' >> /usr/local/bin/logged-bash && \
+    echo 'exec rbash -i 2>&1 | tee /dev/stdout' >> /usr/local/bin/logged-bash && \
     chmod 555 /usr/local/bin/logged-bash && \
     chown root:root /usr/local/bin/logged-bash
 
-# Force shell for jovyan
+# Force rbash for jovyan
 RUN usermod -s /usr/local/bin/logged-bash jovyan
 
-# Audit script (logs to stdout for kubectl logs)
+# PROMPT_COMMAND forced to log commands
+RUN echo 'export PROMPT_COMMAND='\''RECORD=$(history 1 | sed "s/^ *[0-9]* *//"); echo "[COMMAND] $(whoami): $RECORD" >> /proc/1/fd/1'\''' > /etc/profile.d/audit-cmd.sh && \
+    chmod 444 /etc/profile.d/audit-cmd.sh && \
+    chown root:root /etc/profile.d/audit-cmd.sh
+
+# Audit script
 RUN echo '#!/bin/bash' > /usr/local/bin/audit-fs && \
     echo 'exec 1> >(tee /dev/stdout) 2>&1' >> /usr/local/bin/audit-fs && \
     echo 'inotifywait -m -r -e create,modify,delete,move --format "%T|%e|%w%f" --timefmt "%F %T" /home/jovyan | while IFS="|" read -r timestamp event file; do' >> /usr/local/bin/audit-fs && \
@@ -56,7 +64,7 @@ RUN echo '#!/bin/bash' > /usr/local/bin/audit-fs && \
     chmod 555 /usr/local/bin/audit-fs && \
     chown root:root /usr/local/bin/audit-fs
 
-# Lock VS Code terminal settings
+# VS Code settings lock
 RUN mkdir -p /opt/static/code-server/User && \
     cat <<EOF > /opt/static/code-server/User/settings.json
 {
@@ -89,7 +97,7 @@ c.ServerProxy.servers = {
 }
 EOF
 
-# Compatible startup with JupyterHub
+# Startup entry
 RUN echo '#!/bin/bash' > /usr/local/bin/start-with-audit && \
     echo '/usr/local/bin/audit-fs &' >> /usr/local/bin/start-with-audit && \
     echo 'if [ "$#" -eq 0 ]; then' >> /usr/local/bin/start-with-audit && \
@@ -100,7 +108,6 @@ RUN echo '#!/bin/bash' > /usr/local/bin/start-with-audit && \
     chmod 555 /usr/local/bin/start-with-audit && \
     chown root:root /usr/local/bin/start-with-audit
 
-# JupyterHub expects CMD not ENTRYPOINT
 CMD ["/usr/local/bin/start-with-audit"]
 
 USER ${NB_UID}
