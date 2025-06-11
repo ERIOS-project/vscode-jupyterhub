@@ -45,12 +45,18 @@ RUN echo 'export PROMPT_COMMAND='\''RECORD=$(history 1 | sed "s/^ *[0-9]* *//");
     chmod 444 /etc/profile.d/audit-cmd.sh && \
     chown root:root /etc/profile.d/audit-cmd.sh
 
-# Audit script
-# Audit script
-RUN echo '#!/bin/bash' > /usr/local/bin/audit-fs && \
-    echo 'sleep 3' >> /usr/local/bin/audit-fs && \
-    echo 'LOG="/proc/1/fd/1"' >> /usr/local/bin/audit-fs && \
-    echo 'inotifywait -m -r -e create,modify,delete,move --format "%T|%e|%w%f" --timefmt "%F %T" /home/jovyan | \\' >> /usr/local/bin/audit-fs && \
+# Audit script (file monitoring to stdout)
+# Secure audit-fs script
+RUN mkdir -p /usr/local/bin && \
+    echo '#!/bin/bash' > /usr/local/bin/audit-fs && \
+    echo 'sleep 5' >> /usr/local/bin/audit-fs && \
+    echo 'WATCH_DIR="/home/jovyan"' >> /usr/local/bin/audit-fs && \
+    echo 'LOG="/dev/stdout"' >> /usr/local/bin/audit-fs && \
+    echo 'if [ ! -d "$WATCH_DIR" ]; then' >> /usr/local/bin/audit-fs && \
+    echo '  echo "[AUDIT ERROR] Directory $WATCH_DIR does not exist!" >> "$LOG"' >> /usr/local/bin/audit-fs && \
+    echo '  exit 1' >> /usr/local/bin/audit-fs && \
+    echo 'fi' >> /usr/local/bin/audit-fs && \
+    echo 'inotifywait -m -r -e create,modify,delete,move --format "%T|%e|%w%f" --timefmt "%F %T" "$WATCH_DIR" | \\' >> /usr/local/bin/audit-fs && \
     echo 'while IFS="|" read -r timestamp event file; do' >> /usr/local/bin/audit-fs && \
     echo '  echo "[FILE EVENT] $timestamp $event $file" >> "$LOG"' >> /usr/local/bin/audit-fs && \
     echo '  if echo "$event" | grep -qE "CREATE|MODIFY" && [ -f "$file" ]; then' >> /usr/local/bin/audit-fs && \
@@ -68,7 +74,6 @@ RUN echo '#!/bin/bash' > /usr/local/bin/audit-fs && \
     echo 'done' >> /usr/local/bin/audit-fs && \
     chmod 555 /usr/local/bin/audit-fs && \
     chown root:root /usr/local/bin/audit-fs
-
 
 # Lock VS Code terminal settings
 RUN mkdir -p /opt/static/code-server/User && \
