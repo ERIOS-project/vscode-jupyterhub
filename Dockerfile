@@ -31,7 +31,7 @@ RUN ln -sf /proc/1/fd/1 /var/log/terminal.log
 # Shell wrapper with security banner
 RUN echo '#!/bin/bash' > /usr/local/bin/logged-bash && \
     echo 'echo "🛡️  This session is being monitored and recorded for security and compliance purposes."' >> /usr/local/bin/logged-bash && \
-    echo 'exec script -q -c /bin/bash /proc/1/fd/1' >> /usr/local/bin/logged-bash && \
+    echo 'exec script -q -c /bin/bash /dev/stdout' >> /usr/local/bin/logged-bash && \
     chmod 555 /usr/local/bin/logged-bash && \
     chown root:root /usr/local/bin/logged-bash
 
@@ -41,14 +41,14 @@ RUN usermod -s /usr/local/bin/logged-bash jovyan
 # Audit script
 RUN echo '#!/bin/bash' > /usr/local/bin/audit-fs && \
     echo 'inotifywait -m -r -e create,modify,delete,move --format "%T|%e|%w%f" --timefmt "%F %T" /home/jovyan | while IFS="|" read -r timestamp event file; do' >> /usr/local/bin/audit-fs && \
-    echo '  echo "[FILE EVENT] $timestamp $event $file" >> /proc/1/fd/1' >> /usr/local/bin/audit-fs && \
+    echo '  echo "[FILE EVENT] $timestamp $event $file" >> /dev/stdout' >> /usr/local/bin/audit-fs && \
     echo '  if echo "$event" | grep -qE "CREATE|MODIFY" && [ -f "$file" ]; then' >> /usr/local/bin/audit-fs && \
     echo '    if [[ "$file" =~ \.py$|\.ipynb$|\.sh$|\.json$|\.env$|\.yaml$|\.yml$|\.txt$|\.js$ ]]; then' >> /usr/local/bin/audit-fs && \
-    echo '      echo "--- Content of $file ---" >> /proc/1/fd/1' >> /usr/local/bin/audit-fs && \
-    echo '      cat "$file" >> /proc/1/fd/1' >> /usr/local/bin/audit-fs && \
-    echo '      echo "--- End of $file ---" >> /proc/1/fd/1' >> /usr/local/bin/audit-fs && \
+    echo '      echo "--- Content of $file ---" >> /dev/stdout' >> /usr/local/bin/audit-fs && \
+    echo '      cat "$file" >> /dev/stdout' >> /usr/local/bin/audit-fs && \
+    echo '      echo "--- End of $file ---" >> /dev/stdout' >> /usr/local/bin/audit-fs && \
     echo '    else' >> /usr/local/bin/audit-fs && \
-    echo '      echo "--- Content skipped for $file (extension not tracked) ---" >> /proc/1/fd/1' >> /usr/local/bin/audit-fs && \
+    echo '      echo "--- Content skipped for $file (extension not tracked) ---" >> /dev/stdout' >> /usr/local/bin/audit-fs && \
     echo '    fi' >> /usr/local/bin/audit-fs && \
     echo '  fi' >> /usr/local/bin/audit-fs && \
     echo 'done' >> /usr/local/bin/audit-fs && \
