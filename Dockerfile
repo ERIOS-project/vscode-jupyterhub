@@ -28,27 +28,28 @@ RUN pip install --no-cache-dir jupyter-server-proxy debugpy poetry udocker && \
 # Symbolic link to docker stdout
 RUN ln -sf /proc/1/fd/1 /var/log/terminal.log
 
-# Shell wrapper with security banner
+# Shell wrapper with security banner (fixes echo + logs to stdout)
 RUN echo '#!/bin/bash' > /usr/local/bin/logged-bash && \
-    echo 'echo "🛡️  This session is being monitored and recorded for security and compliance purposes."' >> /usr/local/bin/logged-bash && \
-    echo 'exec script -q -c /bin/bash /dev/stdout' >> /usr/local/bin/logged-bash && \
+    echo 'echo "🛡️  This session is being monitored and recorded for security and compliance purposes." | tee /dev/stdout' >> /usr/local/bin/logged-bash && \
+    echo 'exec script -q -E -c "stty -echo; exec /bin/bash" >(tee /dev/stdout)' >> /usr/local/bin/logged-bash && \
     chmod 555 /usr/local/bin/logged-bash && \
     chown root:root /usr/local/bin/logged-bash
 
 # Force shell for jovyan
 RUN usermod -s /usr/local/bin/logged-bash jovyan
 
-# Audit script
+# Audit script (logs to stdout for kubectl logs)
 RUN echo '#!/bin/bash' > /usr/local/bin/audit-fs && \
+    echo 'exec 1> >(tee /dev/stdout) 2>&1' >> /usr/local/bin/audit-fs && \
     echo 'inotifywait -m -r -e create,modify,delete,move --format "%T|%e|%w%f" --timefmt "%F %T" /home/jovyan | while IFS="|" read -r timestamp event file; do' >> /usr/local/bin/audit-fs && \
-    echo '  echo "[FILE EVENT] $timestamp $event $file" >> /dev/stdout' >> /usr/local/bin/audit-fs && \
+    echo '  echo "[FILE EVENT] $timestamp $event $file"' >> /usr/local/bin/audit-fs && \
     echo '  if echo "$event" | grep -qE "CREATE|MODIFY" && [ -f "$file" ]; then' >> /usr/local/bin/audit-fs && \
     echo '    if [[ "$file" =~ \.py$|\.ipynb$|\.sh$|\.json$|\.env$|\.yaml$|\.yml$|\.txt$|\.js$ ]]; then' >> /usr/local/bin/audit-fs && \
-    echo '      echo "--- Content of $file ---" >> /dev/stdout' >> /usr/local/bin/audit-fs && \
-    echo '      cat "$file" >> /dev/stdout' >> /usr/local/bin/audit-fs && \
-    echo '      echo "--- End of $file ---" >> /dev/stdout' >> /usr/local/bin/audit-fs && \
+    echo '      echo "--- Content of $file ---"' >> /usr/local/bin/audit-fs && \
+    echo '      cat "$file"' >> /usr/local/bin/audit-fs && \
+    echo '      echo "--- End of $file ---"' >> /usr/local/bin/audit-fs && \
     echo '    else' >> /usr/local/bin/audit-fs && \
-    echo '      echo "--- Content skipped for $file (extension not tracked) ---" >> /dev/stdout' >> /usr/local/bin/audit-fs && \
+    echo '      echo "--- Content skipped for $file (extension not tracked) ---"' >> /usr/local/bin/audit-fs && \
     echo '    fi' >> /usr/local/bin/audit-fs && \
     echo '  fi' >> /usr/local/bin/audit-fs && \
     echo 'done' >> /usr/local/bin/audit-fs && \
