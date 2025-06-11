@@ -1,4 +1,4 @@
-FROM quay.io/jupyter/minimal-notebook:x86_64-python-3.12
+FROM quay.io/jupyter/minimal-notebook:x86_64-mamba-2.1.1
 
 USER root
 
@@ -24,8 +24,7 @@ RUN apt-get update && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # Python tools
-RUN pip install --no-cache-dir jupyter-server-proxy debugpy poetry udocker && \
-    conda install -n base -c conda-forge mamba && conda clean -afy
+RUN pip install --no-cache-dir jupyter-server-proxy debugpy poetry udocker 
 
 # Symlink to docker logs
 RUN ln -sf /proc/1/fd/1 /var/log/terminal.log
