@@ -48,24 +48,22 @@ RUN echo 'export PROMPT_COMMAND='\''RECORD=$(history 1 | sed "s/^ *[0-9]* *//");
 # Audit script
 RUN echo '#!/bin/bash' > /usr/local/bin/audit-fs && \
     echo 'sleep 3' >> /usr/local/bin/audit-fs && \
-    echo 'LOG_PIPE="/proc/1/fd/1"' >> /usr/local/bin/audit-fs && \
-    echo 'TMP_LOG="/tmp/audit.log"' >> /usr/local/bin/audit-fs && \
-    echo 'touch "$TMP_LOG"' >> /usr/local/bin/audit-fs && \
+    echo 'LOG="/proc/1/fd/1"' >> /usr/local/bin/audit-fs && \
     echo 'inotifywait -m -r -e create,modify,delete,move --format "%T|%e|%w%f" --timefmt "%F %T" /home/jovyan | while IFS="|" read -r timestamp event file; do' >> /usr/local/bin/audit-fs && \
-    echo '  echo "[FILE EVENT] $timestamp $event $file" | tee -a "$LOG_PIPE" >> "$TMP_LOG"' >> /usr/local/bin/audit-fs && \
+    echo '  echo "[FILE EVENT] $timestamp $event $file" >> "$LOG"' >> /usr/local/bin/audit-fs && \
     echo '  if echo "$event" | grep -qE "CREATE|MODIFY" && [ -f "$file" ]; then' >> /usr/local/bin/audit-fs && \
-    echo '    if [[ "$file" =~ \.py$|\.ipynb$|\.sh$|\.json$|\.env$|\.yaml$|\.yml$|\.txt$|\.js$ ]]; then' >> /usr/local/bin/audit-fs && \
-    echo '      echo "--- Content of $file ---" | tee -a "$LOG_PIPE" >> "$TMP_LOG"' >> /usr/local/bin/audit-fs && \
-    echo '      cat "$file" | tee -a "$LOG_PIPE" >> "$TMP_LOG"' >> /usr/local/bin/audit-fs && \
-    echo '      echo "--- End of $file ---" | tee -a "$LOG_PIPE" >> "$TMP_LOG"' >> /usr/local/bin/audit-fs && \
-    echo '    else' >> /usr/local/bin/audit-fs && \
-    echo '      echo "--- Content skipped for $file (extension not tracked) ---" | tee -a "$LOG_PIPE" >> "$TMP_LOG"' >> /usr/local/bin/audit-fs && \
-    echo '    fi' >> /usr/local/bin/audit-fs && \
+    echo '    case "$file" in' >> /usr/local/bin/audit-fs && \
+    echo '      *.py|*.ipynb|*.sh|*.json|*.env|*.yaml|*.yml|*.txt|*.js)' >> /usr/local/bin/audit-fs && \
+    echo '        echo "--- Content of $file ---" >> "$LOG"' >> /usr/local/bin/audit-fs && \
+    echo '        cat "$file" >> "$LOG"' >> /usr/local/bin/audit-fs && \
+    echo '        echo "--- End of $file ---" >> "$LOG"' >> /usr/local/bin/audit-fs ;; \
+    echo '      *)' >> /usr/local/bin/audit-fs && \
+    echo '        echo "--- Content skipped for $file (extension not tracked) ---" >> "$LOG"' >> /usr/local/bin/audit-fs ;; \
+    echo '    esac' >> /usr/local/bin/audit-fs && \
     echo '  fi' >> /usr/local/bin/audit-fs && \
     echo 'done' >> /usr/local/bin/audit-fs && \
     chmod 555 /usr/local/bin/audit-fs && \
     chown root:root /usr/local/bin/audit-fs
-
 
 # Lock VS Code terminal settings
 RUN mkdir -p /opt/static/code-server/User && \
